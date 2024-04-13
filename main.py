@@ -8,10 +8,13 @@ import os
 # Importing the `sys` module, which provides access to some variables used or maintained by the Python interpreter and to functions that interact strongly with the interpreter.
 import sys
 
+from sensor.logger import logging
+
 # Defining a function named `test_exception`.
 def test_exception():
     # Using a try-except block to catch exceptions.
     try:
+        logging.INFO("Yahan pa ek to error aie gi one devide by zero wali error")
         # Trying to execute code that may raise an exception.
         a = 1 / 0  # This line will raise a ZeroDivisionError intentionally.
     except Exception as e:
