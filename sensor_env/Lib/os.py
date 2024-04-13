@@ -28,15 +28,13 @@ import stat as st
 
 from _collections_abc import _check_methods
 
-GenericAlias = type(list[int])
-
 _names = sys.builtin_module_names
 
 # Note:  more names are added to __all__ later.
 __all__ = ["altsep", "curdir", "pardir", "sep", "pathsep", "linesep",
            "defpath", "name", "path", "devnull", "SEEK_SET", "SEEK_CUR",
            "SEEK_END", "fsencode", "fsdecode", "get_exec_path", "fdopen",
-           "extsep"]
+           "popen", "extsep"]
 
 def _exists(name):
     return name in globals()
@@ -288,8 +286,7 @@ def walk(top, topdown=True, onerror=None, followlinks=False):
         dirpath, dirnames, filenames
 
     dirpath is a string, the path to the directory.  dirnames is a list of
-    the names of the subdirectories in dirpath (including symlinks to directories,
-    and excluding '.' and '..').
+    the names of the subdirectories in dirpath (excluding '.' and '..').
     filenames is a list of the names of the non-directory files in dirpath.
     Note that the names in the lists are just names, with no path components.
     To get a full path (which begins with top) to a file or directory in
@@ -332,103 +329,94 @@ def walk(top, topdown=True, onerror=None, followlinks=False):
     import os
     from os.path import join, getsize
     for root, dirs, files in os.walk('python/Lib/email'):
-        print(root, "consumes ")
-        print(sum(getsize(join(root, name)) for name in files), end=" ")
+        print(root, "consumes", end="")
+        print(sum(getsize(join(root, name)) for name in files), end="")
         print("bytes in", len(files), "non-directory files")
         if 'CVS' in dirs:
             dirs.remove('CVS')  # don't visit CVS directories
 
     """
-    sys.audit("os.walk", top, topdown, onerror, followlinks)
+    top = fspath(top)
+    dirs = []
+    nondirs = []
+    walk_dirs = []
 
-    stack = [fspath(top)]
-    islink, join = path.islink, path.join
-    while stack:
-        top = stack.pop()
-        if isinstance(top, tuple):
-            yield top
-            continue
+    # We may not have read permission for top, in which case we can't
+    # get a list of the files the directory contains.  os.walk
+    # always suppressed the exception then, rather than blow up for a
+    # minor reason when (say) a thousand readable directories are still
+    # left to visit.  That logic is copied here.
+    try:
+        # Note that scandir is global in this module due
+        # to earlier import-*.
+        scandir_it = scandir(top)
+    except OSError as error:
+        if onerror is not None:
+            onerror(error)
+        return
 
-        dirs = []
-        nondirs = []
-        walk_dirs = []
-
-        # We may not have read permission for top, in which case we can't
-        # get a list of the files the directory contains.
-        # We suppress the exception here, rather than blow up for a
-        # minor reason when (say) a thousand readable directories are still
-        # left to visit.
-        try:
-            scandir_it = scandir(top)
-        except OSError as error:
-            if onerror is not None:
-                onerror(error)
-            continue
-
-        cont = False
-        with scandir_it:
-            while True:
+    with scandir_it:
+        while True:
+            try:
                 try:
-                    try:
-                        entry = next(scandir_it)
-                    except StopIteration:
-                        break
-                except OSError as error:
-                    if onerror is not None:
-                        onerror(error)
-                    cont = True
+                    entry = next(scandir_it)
+                except StopIteration:
                     break
+            except OSError as error:
+                if onerror is not None:
+                    onerror(error)
+                return
 
-                try:
-                    is_dir = entry.is_dir()
-                except OSError:
-                    # If is_dir() raises an OSError, consider the entry not to
-                    # be a directory, same behaviour as os.path.isdir().
-                    is_dir = False
+            try:
+                is_dir = entry.is_dir()
+            except OSError:
+                # If is_dir() raises an OSError, consider that the entry is not
+                # a directory, same behaviour than os.path.isdir().
+                is_dir = False
 
-                if is_dir:
-                    dirs.append(entry.name)
+            if is_dir:
+                dirs.append(entry.name)
+            else:
+                nondirs.append(entry.name)
+
+            if not topdown and is_dir:
+                # Bottom-up: recurse into sub-directory, but exclude symlinks to
+                # directories if followlinks is False
+                if followlinks:
+                    walk_into = True
                 else:
-                    nondirs.append(entry.name)
+                    try:
+                        is_symlink = entry.is_symlink()
+                    except OSError:
+                        # If is_symlink() raises an OSError, consider that the
+                        # entry is not a symbolic link, same behaviour than
+                        # os.path.islink().
+                        is_symlink = False
+                    walk_into = not is_symlink
 
-                if not topdown and is_dir:
-                    # Bottom-up: traverse into sub-directory, but exclude
-                    # symlinks to directories if followlinks is False
-                    if followlinks:
-                        walk_into = True
-                    else:
-                        try:
-                            is_symlink = entry.is_symlink()
-                        except OSError:
-                            # If is_symlink() raises an OSError, consider the
-                            # entry not to be a symbolic link, same behaviour
-                            # as os.path.islink().
-                            is_symlink = False
-                        walk_into = not is_symlink
+                if walk_into:
+                    walk_dirs.append(entry.path)
 
-                    if walk_into:
-                        walk_dirs.append(entry.path)
-        if cont:
-            continue
+    # Yield before recursion if going top down
+    if topdown:
+        yield top, dirs, nondirs
 
-        if topdown:
-            # Yield before sub-directory traversal if going top down
-            yield top, dirs, nondirs
-            # Traverse into sub-directories
-            for dirname in reversed(dirs):
-                new_path = join(top, dirname)
-                # bpo-23605: os.path.islink() is used instead of caching
-                # entry.is_symlink() result during the loop on os.scandir() because
-                # the caller can replace the directory entry during the "yield"
-                # above.
-                if followlinks or not islink(new_path):
-                    stack.append(new_path)
-        else:
-            # Yield after sub-directory traversal if going bottom up
-            stack.append((top, dirs, nondirs))
-            # Traverse into sub-directories
-            for new_path in reversed(walk_dirs):
-                stack.append(new_path)
+        # Recurse into sub-directories
+        islink, join = path.islink, path.join
+        for dirname in dirs:
+            new_path = join(top, dirname)
+            # Issue #23605: os.path.islink() is used instead of caching
+            # entry.is_symlink() result during the loop on os.scandir() because
+            # the caller can replace the directory entry during the "yield"
+            # above.
+            if followlinks or not islink(new_path):
+                yield from walk(new_path, topdown, onerror, followlinks)
+    else:
+        # Recurse into sub-directories
+        for new_path in walk_dirs:
+            yield from walk(new_path, topdown, onerror, followlinks)
+        # Yield after recursion if going bottom up
+        yield top, dirs, nondirs
 
 __all__.append("walk")
 
@@ -467,8 +455,8 @@ if {open, stat} <= supports_dir_fd and {scandir, stat} <= supports_fd:
             if 'CVS' in dirs:
                 dirs.remove('CVS')  # don't visit CVS directories
         """
-        sys.audit("os.fwalk", top, topdown, onerror, follow_symlinks, dir_fd)
-        top = fspath(top)
+        if not isinstance(top, int) or not hasattr(top, '__index__'):
+            top = fspath(top)
         # Note: To guard against symlink races, we use the standard
         # lstat()/open()/fstat() trick.
         if not follow_symlinks:
@@ -666,15 +654,17 @@ def get_exec_path(env=None):
     return path_list.split(pathsep)
 
 
-# Change environ to automatically call putenv() and unsetenv()
-from _collections_abc import MutableMapping, Mapping
+# Change environ to automatically call putenv(), unsetenv if they exist.
+from _collections_abc import MutableMapping
 
 class _Environ(MutableMapping):
-    def __init__(self, data, encodekey, decodekey, encodevalue, decodevalue):
+    def __init__(self, data, encodekey, decodekey, encodevalue, decodevalue, putenv, unsetenv):
         self.encodekey = encodekey
         self.decodekey = decodekey
         self.encodevalue = encodevalue
         self.decodevalue = decodevalue
+        self.putenv = putenv
+        self.unsetenv = unsetenv
         self._data = data
 
     def __getitem__(self, key):
@@ -688,12 +678,12 @@ class _Environ(MutableMapping):
     def __setitem__(self, key, value):
         key = self.encodekey(key)
         value = self.encodevalue(value)
-        putenv(key, value)
+        self.putenv(key, value)
         self._data[key] = value
 
     def __delitem__(self, key):
         encodedkey = self.encodekey(key)
-        unsetenv(encodedkey)
+        self.unsetenv(encodedkey)
         try:
             del self._data[encodedkey]
         except KeyError:
@@ -710,11 +700,9 @@ class _Environ(MutableMapping):
         return len(self._data)
 
     def __repr__(self):
-        formatted_items = ", ".join(
-            f"{self.decodekey(key)!r}: {self.decodevalue(value)!r}"
-            for key, value in self._data.items()
-        )
-        return f"environ({{{formatted_items}}})"
+        return 'environ({{{}}})'.format(', '.join(
+            ('{!r}: {!r}'.format(self.decodekey(key), self.decodevalue(value))
+            for key, value in self._data.items())))
 
     def copy(self):
         return dict(self)
@@ -724,23 +712,21 @@ class _Environ(MutableMapping):
             self[key] = value
         return self[key]
 
-    def __ior__(self, other):
-        self.update(other)
-        return self
+try:
+    _putenv = putenv
+except NameError:
+    _putenv = lambda key, value: None
+else:
+    if "putenv" not in __all__:
+        __all__.append("putenv")
 
-    def __or__(self, other):
-        if not isinstance(other, Mapping):
-            return NotImplemented
-        new = dict(self)
-        new.update(other)
-        return new
-
-    def __ror__(self, other):
-        if not isinstance(other, Mapping):
-            return NotImplemented
-        new = dict(other)
-        new.update(self)
-        return new
+try:
+    _unsetenv = unsetenv
+except NameError:
+    _unsetenv = lambda key: _putenv(key, "")
+else:
+    if "unsetenv" not in __all__:
+        __all__.append("unsetenv")
 
 def _createenviron():
     if name == 'nt':
@@ -769,7 +755,8 @@ def _createenviron():
         data = environ
     return _Environ(data,
         encodekey, decode,
-        encode, decode)
+        encode, decode,
+        _putenv, _unsetenv)
 
 # unicode environ
 environ = _createenviron()
@@ -794,7 +781,8 @@ if supports_bytes_environ:
     # bytes environ
     environb = _Environ(environ._data,
         _check_bytes, bytes,
-        _check_bytes, bytes)
+        _check_bytes, bytes,
+        _putenv, _unsetenv)
     del _check_bytes
 
     def getenvb(key, default=None):
@@ -874,8 +862,12 @@ if _exists("fork") and not _exists("spawnv") and _exists("execv"):
                 wpid, sts = waitpid(pid, 0)
                 if WIFSTOPPED(sts):
                     continue
-
-                return waitstatus_to_exitcode(sts)
+                elif WIFSIGNALED(sts):
+                    return -WTERMSIG(sts)
+                elif WIFEXITED(sts):
+                    return WEXITSTATUS(sts)
+                else:
+                    raise OSError("Not stopped, signaled or exited???")
 
     def spawnv(mode, file, args):
         """spawnv(mode, file, args) -> integer
@@ -977,64 +969,58 @@ otherwise return -SIG, where SIG is the signal that killed it. """
 
     __all__.extend(["spawnlp", "spawnlpe"])
 
-# VxWorks has no user space shell provided. As a result, running
-# command in a shell can't be supported.
-if sys.platform != 'vxworks':
-    # Supply os.popen()
-    def popen(cmd, mode="r", buffering=-1):
-        if not isinstance(cmd, str):
-            raise TypeError("invalid cmd type (%s, expected string)" % type(cmd))
-        if mode not in ("r", "w"):
-            raise ValueError("invalid mode %r" % mode)
-        if buffering == 0 or buffering is None:
-            raise ValueError("popen() does not support unbuffered streams")
-        import subprocess
-        if mode == "r":
-            proc = subprocess.Popen(cmd,
-                                    shell=True, text=True,
-                                    stdout=subprocess.PIPE,
-                                    bufsize=buffering)
-            return _wrap_close(proc.stdout, proc)
+
+# Supply os.popen()
+def popen(cmd, mode="r", buffering=-1):
+    if not isinstance(cmd, str):
+        raise TypeError("invalid cmd type (%s, expected string)" % type(cmd))
+    if mode not in ("r", "w"):
+        raise ValueError("invalid mode %r" % mode)
+    if buffering == 0 or buffering is None:
+        raise ValueError("popen() does not support unbuffered streams")
+    import subprocess, io
+    if mode == "r":
+        proc = subprocess.Popen(cmd,
+                                shell=True,
+                                stdout=subprocess.PIPE,
+                                bufsize=buffering)
+        return _wrap_close(io.TextIOWrapper(proc.stdout), proc)
+    else:
+        proc = subprocess.Popen(cmd,
+                                shell=True,
+                                stdin=subprocess.PIPE,
+                                bufsize=buffering)
+        return _wrap_close(io.TextIOWrapper(proc.stdin), proc)
+
+# Helper for popen() -- a proxy for a file whose close waits for the process
+class _wrap_close:
+    def __init__(self, stream, proc):
+        self._stream = stream
+        self._proc = proc
+    def close(self):
+        self._stream.close()
+        returncode = self._proc.wait()
+        if returncode == 0:
+            return None
+        if name == 'nt':
+            return returncode
         else:
-            proc = subprocess.Popen(cmd,
-                                    shell=True, text=True,
-                                    stdin=subprocess.PIPE,
-                                    bufsize=buffering)
-            return _wrap_close(proc.stdin, proc)
-
-    # Helper for popen() -- a proxy for a file whose close waits for the process
-    class _wrap_close:
-        def __init__(self, stream, proc):
-            self._stream = stream
-            self._proc = proc
-        def close(self):
-            self._stream.close()
-            returncode = self._proc.wait()
-            if returncode == 0:
-                return None
-            if name == 'nt':
-                return returncode
-            else:
-                return returncode << 8  # Shift left to match old behavior
-        def __enter__(self):
-            return self
-        def __exit__(self, *args):
-            self.close()
-        def __getattr__(self, name):
-            return getattr(self._stream, name)
-        def __iter__(self):
-            return iter(self._stream)
-
-    __all__.append("popen")
+            return returncode << 8  # Shift left to match old behavior
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        self.close()
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+    def __iter__(self):
+        return iter(self._stream)
 
 # Supply os.fdopen()
-def fdopen(fd, mode="r", buffering=-1, encoding=None, *args, **kwargs):
+def fdopen(fd, *args, **kwargs):
     if not isinstance(fd, int):
         raise TypeError("invalid fd type (%s, expected integer)" % type(fd))
     import io
-    if "b" not in mode:
-        encoding = io.text_encoding(encoding)
-    return io.open(fd, mode, buffering, encoding, *args, **kwargs)
+    return io.open(fd, *args, **kwargs)
 
 
 # For testing purposes, make sure the function is available when the C
@@ -1089,8 +1075,6 @@ class PathLike(abc.ABC):
         if cls is PathLike:
             return _check_methods(subclass, '__fspath__')
         return NotImplemented
-
-    __class_getitem__ = classmethod(GenericAlias)
 
 
 if name == 'nt':

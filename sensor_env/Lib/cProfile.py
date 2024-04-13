@@ -7,7 +7,6 @@
 __all__ = ["run", "runctx", "Profile"]
 
 import _lsprof
-import importlib.machinery
 import io
 import profile as _pyprofile
 
@@ -105,12 +104,28 @@ class Profile(_lsprof.Profiler):
         return self
 
     # This method is more useful to profile a single function call.
-    def runcall(self, func, /, *args, **kw):
+    def runcall(*args, **kw):
+        if len(args) >= 2:
+            self, func, *args = args
+        elif not args:
+            raise TypeError("descriptor 'runcall' of 'Profile' object "
+                            "needs an argument")
+        elif 'func' in kw:
+            func = kw.pop('func')
+            self, *args = args
+            import warnings
+            warnings.warn("Passing 'func' as keyword argument is deprecated",
+                          DeprecationWarning, stacklevel=2)
+        else:
+            raise TypeError('runcall expected at least 1 positional argument, '
+                            'got %d' % (len(args)-1))
+
         self.enable()
         try:
             return func(*args, **kw)
         finally:
             self.disable()
+    runcall.__text_signature__ = '($self, func, /, *args, **kw)'
 
     def __enter__(self):
         self.enable()
@@ -142,7 +157,7 @@ def main():
         help="Save stats to <outfile>", default=None)
     parser.add_option('-s', '--sort', dest="sort",
         help="Sort order when printing to stdout, based on pstats.Stats class",
-        default=2,
+        default=-1,
         choices=sorted(pstats.Stats.sort_arg_dict_default))
     parser.add_option('-m', dest="module", action="store_true",
         help="Profile a library module", default=False)
@@ -171,12 +186,9 @@ def main():
             sys.path.insert(0, os.path.dirname(progname))
             with io.open_code(progname) as fp:
                 code = compile(fp.read(), progname, 'exec')
-            spec = importlib.machinery.ModuleSpec(name='__main__', loader=None,
-                                                  origin=progname)
             globs = {
-                '__spec__': spec,
-                '__file__': spec.origin,
-                '__name__': spec.name,
+                '__file__': progname,
+                '__name__': '__main__',
                 '__package__': None,
                 '__cached__': None,
             }

@@ -97,11 +97,8 @@ elif os.name == "posix":
     def _is_elf(filename):
         "Return True if the given file is an ELF file"
         elf_header = b'\x7fELF'
-        try:
-            with open(filename, 'br') as thefile:
-                return thefile.read(4) == elf_header
-        except FileNotFoundError:
-            return False
+        with open(filename, 'br') as thefile:
+            return thefile.read(4) == elf_header
 
     def _findLib_gcc(name):
         # Run GCC's linker with the -t (aka --trace) option and examine the
@@ -345,13 +342,13 @@ elif os.name == "posix":
             so_name = _get_soname(_findLib_prefix(name)) or name
             if so_name != name:
                 return _findLib_prefix(so_name) or \
-                       _findLib_prefix(name) or \
-                       _findSoname_ldconfig(name) or \
-                       _get_soname(_findLib_gcc(name)) or _get_soname(_findLib_ld(name))
-            else:
-                 return _findLib_prefix(name) or \
+                        _findLib_prefix(name) or \
                         _findSoname_ldconfig(name) or \
-                        _get_soname(_findLib_gcc(name)) or _get_soname(_findLib_ld(name))
+                        _get_soname(_findLib_gcc(name) or _findLib_ld(name))
+            else:
+                return _findLib_prefix(name) or \
+                        _findSoname_ldconfig(name) or \
+                        _get_soname(_findLib_gcc(name) or _findLib_ld(name))
 
 ################################################################
 # test code

@@ -21,3 +21,15 @@
 +defaults/win-64::xz-5.4.6-h8cc25b3_0
 +defaults/win-64::zlib-1.2.13-h8cc25b3_0
 # update specs: ['python']
+==> 2024-04-13 15:48:47 <==
+# cmd: C:\Users\Abdul Qadir\anaconda3\Scripts\conda-script.py install python=3.8
+# conda version: 23.9.0
+-defaults/win-64::pip-23.3.1-py312haa95532_0
+-defaults/win-64::python-3.12.2-h1d929f7_0
+-defaults/win-64::setuptools-68.2.2-py312haa95532_0
+-defaults/win-64::wheel-0.41.2-py312haa95532_0
++defaults/win-64::pip-23.3.1-py38haa95532_0
++defaults/win-64::python-3.8.19-h1aa4202_0
++defaults/win-64::setuptools-68.2.2-py38haa95532_0
++defaults/win-64::wheel-0.41.2-py38haa95532_0
+# update specs: ['python=3.8']

@@ -1,0 +1,3 @@
+pymongo==4.2.0
+
+-e . #editable mode ,will directly triggers setup.py file to run

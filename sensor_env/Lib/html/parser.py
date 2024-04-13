@@ -9,6 +9,7 @@
 
 
 import re
+import warnings
 import _markupbase
 
 from html import unescape
@@ -89,7 +90,6 @@ class HTMLParser(_markupbase.ParserBase):
         If convert_charrefs is True (the default), all character references
         are automatically converted to the corresponding Unicode characters.
         """
-        super().__init__()
         self.convert_charrefs = convert_charrefs
         self.reset()
 
@@ -99,7 +99,7 @@ class HTMLParser(_markupbase.ParserBase):
         self.lasttag = '???'
         self.interesting = interesting_normal
         self.cdata_elem = None
-        super().reset()
+        _markupbase.ParserBase.reset(self)
 
     def feed(self, data):
         r"""Feed data to the parser.
@@ -329,6 +329,13 @@ class HTMLParser(_markupbase.ParserBase):
 
         end = rawdata[k:endpos].strip()
         if end not in (">", "/>"):
+            lineno, offset = self.getpos()
+            if "\n" in self.__starttag_text:
+                lineno = lineno + self.__starttag_text.count("\n")
+                offset = len(self.__starttag_text) \
+                         - self.__starttag_text.rfind("\n")
+            else:
+                offset = offset + len(self.__starttag_text)
             self.handle_data(rawdata[i:endpos])
             return endpos
         if end.endswith('/>'):
@@ -399,7 +406,7 @@ class HTMLParser(_markupbase.ParserBase):
             tagname = namematch.group(1).lower()
             # consume and ignore other stuff between the name and the >
             # Note: this is not 100% correct, since we might have things like
-            # </tag attr=">">, but looking for > after the name should cover
+            # </tag attr=">">, but looking for > after tha name should cover
             # most of the cases and is much simpler
             gtpos = rawdata.find('>', namematch.end())
             self.handle_endtag(tagname)
@@ -454,3 +461,10 @@ class HTMLParser(_markupbase.ParserBase):
 
     def unknown_decl(self, data):
         pass
+
+    # Internal -- helper to remove special character quoting
+    def unescape(self, s):
+        warnings.warn('The unescape method is deprecated and will be removed '
+                      'in 3.5, use html.unescape() instead.',
+                      DeprecationWarning, stacklevel=2)
+        return unescape(s)
