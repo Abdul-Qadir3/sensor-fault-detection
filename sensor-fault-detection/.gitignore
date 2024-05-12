@@ -5,7 +5,7 @@ __pycache__/
 
 # C extensions
 *.so
-image.png
+..\image.png
 # Distribution / packaging
 sensor_env
 .Python
