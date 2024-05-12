@@ -3,3 +3,4 @@ Name: sensor
 Version: 0.0.1
 Author: Abdul Qadir
 Author-email: aq452831@gmail.com
+Requires-Dist: pymongo==4.2.0

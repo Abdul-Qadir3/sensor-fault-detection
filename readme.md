@@ -24,11 +24,12 @@ We use `__init__.py` to form a `pakage file` can be used `accessed` everywhere a
 - `python setup.py install` to run one time installation in the project
 - Package `related information` or `metadata` after the `creation of package` from the `folder` after running the `setup file` saves in `.egg` file
 
-## Exception File
+## Exception File(this file can be used in any python project)
 Used in any project involves python
-- An "Exception File" is not a standard term in Python. However, it could refer to a file where you handle exceptions in your Python code.
+- An "Exception File" is not a standard term in Python. However, it could refer to a file where you handle exceptions(errors) in your Python code.
 - In Python, exceptions are raised when `errors occur` during program execution. You can `catch and handle` these exceptions using `try and except` blocks.
 - An "Exception File" could be where you write code to `catch and manage these exceptions`, such as logging them or displaying error messages to users.
+- `python main.py` to run exceptions
 ## Logger File
 Used in any project involves python
 - A `Logger File` typically refers to a Python `script or module` where you set up `logging` functionality.

@@ -5,3 +5,6 @@ pymongo==4.2.0
 # This is useful during development when you want to make changes to your code and see the effects without reinstalling the package each time.
 # The '.' refers to the current directory where the setup.py file is located. EDITABLE
 -e . #editable mode ,will directly triggers setup.py file to run not require to run setup file
+
+
+# -e . triggers setup.py file without runing it manually
