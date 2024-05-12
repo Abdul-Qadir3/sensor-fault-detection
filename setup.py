@@ -1,4 +1,5 @@
 # Importing necessary functions from setuptools package
+# find_packages will go and search for the pakages . it will consider a folder as pakage as it sees __init__.py
 from setuptools import find_packages, setup
 
 # Function to retrieve project dependencies

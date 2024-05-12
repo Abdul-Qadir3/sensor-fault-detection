@@ -1,4 +1,4 @@
-# Importing the custom exception class `SensorException` from the `sensor` module (presumably defined in `__init__.py` or another file).
+# Importing the custom exception class `SensorException` from the `sensor` folder (presumably defined in `__init__.py` or another file).
 # Importing `SensorException` from `sensor.Exception` means there's a module named `sensor` and inside it, there's a submodule or class named `Exception`.
 from sensor.exception import SensorException
 
