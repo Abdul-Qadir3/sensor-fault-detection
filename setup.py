@@ -3,12 +3,16 @@
 from setuptools import find_packages, setup
 
 from typing import List
+
 # Function to retrieve project dependencies
 def get_requirements() -> List[str]: # to install list of dependencies 
+    
     # Initialize an empty list to store requirements
     req_list: List[str] = []
+    
     # Return the list of requirements
     return req_list
+
 
 # Configuration of the project setup
 setup(

@@ -28,8 +28,9 @@ class SensorException(Exception):  # Exception is a superclass
     def __init__(self, error_message, error_detail:sys):
         
         # Call the constructor of the superclass (Exception) and pass the `error_message` to it using super function.
-        # super is use to inherit the exception class
+        # super is used to inherit the exception class
         super().__init__(error_message)
+        
         # Store the formatted error message by calling the `error_message_detail` function.
         # Pass the `error_message` and `error_detail` to it.
         self.error_message = error_message_detail(error_message, error_detail=error_detail)
